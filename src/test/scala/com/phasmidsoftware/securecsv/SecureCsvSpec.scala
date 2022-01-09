@@ -4,6 +4,7 @@
 
 package com.phasmidsoftware.securecsv
 
+import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.parse.TableParser
 import com.phasmidsoftware.securecsv.examples.{TeamProject, TeamProjectTableParser}
 import com.phasmidsoftware.table.Table
@@ -29,7 +30,13 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
   }
 
   it should "parsePlaintextRowTable" in {
-    // TODO test me
+    val filename = "examples/TeamProject.csv"
+    val psy: Try[SecureCsv[RawRow]] = SecureCsv.parsePlaintextRowTable(new File(filename), 2)
+    psy should matchPattern { case Success(SecureCsv(_)) => }
+    for (ps <- psy) {
+      ps.table.size shouldBe 5
+      ps.table foreach println
+    }
   }
 
 }

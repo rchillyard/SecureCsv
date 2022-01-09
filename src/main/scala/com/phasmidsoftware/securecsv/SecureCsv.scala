@@ -5,7 +5,7 @@
 package com.phasmidsoftware.securecsv
 
 import com.phasmidsoftware.RawRow
-import com.phasmidsoftware.parse.{TableParser, TableParserException}
+import com.phasmidsoftware.parse.{RawParsers, TableParser, TableParserException}
 import com.phasmidsoftware.table.{HeadedTable, Table}
 
 import java.io.File
@@ -26,9 +26,9 @@ object SecureCsv {
     case _ => Failure(TableParserException("parsedTable is not headed"))
   }
 
-  def parsePlaintextRowTable(file: File)(implicit tp: TableParser[Table[RawRow]]): Try[SecureCsv[RawRow]] = {
-    import com.phasmidsoftware.parse.RawParsers.WithHeaderRow._
+  def parsePlaintextRowTable(file: File, headerRows: Int): Try[SecureCsv[RawRow]] = {
+    implicit object RawRowTableParser extends RawParsers(None, false, headerRows)
+    import RawRowTableParser.RawTableParser
     parsePlaintextTable(file)
   }
-
 }
