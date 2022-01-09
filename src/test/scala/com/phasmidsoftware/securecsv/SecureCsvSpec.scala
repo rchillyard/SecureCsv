@@ -18,6 +18,26 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
 
   behavior of "SecureCsv"
 
+  it should "execute bad workflow 0" in {
+    val args = Array[String]()
+    SecureCsv.workflow(args) shouldBe false
+  }
+
+  it should "execute bad workflow 1" in {
+    val args = Array("-a", "encrypt", "-f", "junk.csv")
+    SecureCsv.workflow(args) shouldBe false
+  }
+
+  it should "execute good workflow 0" in {
+    val args = Array("-f", "examples/TeamProject.csv")
+    SecureCsv.workflow(args) shouldBe true
+  }
+
+  it should "execute good workflow 1" in {
+    val args = Array("-a", "encrypt", "-f", "examples/TeamProject.csv")
+    SecureCsv.workflow(args) shouldBe true
+  }
+
   it should "parsePlaintextTable" in {
     implicit val teamProjectParser: TableParser[Table[TeamProject]] = TeamProjectTableParser
     val filename = "examples/TeamProject.csv"
