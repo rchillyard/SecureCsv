@@ -7,8 +7,8 @@ package com.phasmidsoftware.securecsv
 import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.args.Args
 import com.phasmidsoftware.parse.{EncryptedHeadedStringTableParser, RawParsers, TableParser, TableParserException}
-import com.phasmidsoftware.table.Table.parseResource
-import com.phasmidsoftware.table.{HeadedTable, Table}
+import com.phasmidsoftware.render.{CsvGenerators, CsvRenderer, CsvRenderers}
+import com.phasmidsoftware.table._
 import com.phasmidsoftware.util.FP
 import org.slf4j.Logger
 
@@ -28,20 +28,23 @@ object SecureCsv {
     val say = Args.parse(args, Some("[-a [action]] -f filename [-r row] [-p password] [-o filename] [-n rows]"))
     tryToOption(say) match {
       case Some(as) if as.nonEmpty => // NOTE: we shouldn't have to check this if parse working OK
-        val a = as.getArgValue("a").getOrElse("read")
-        val rsy = (a, as.getArgValue("f"), as.getArgValue("r"), as.getArgValue("p")) match {
-          case ("decrypt", Some(filename), Some(row), Some(password)) =>
-            parseEncryptedRowTable(new File(filename), as.getArgValueAsY("n").getOrElse(1), row, password)
-          case (_, Some(filename), _, _) =>
-            parsePlaintextRowTable(new File(filename), as.getArgValueAsY("n").getOrElse(1)) // XXX ignore row
+        val n = as.getArgValueAs[Int]("n").getOrElse(1)
+        val rsy = (as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("f"), as.getArgValue("r"), as.getArgValue("p")) match {
+          case ("decrypt", Some(file), Some(row), Some(password)) =>
+            parseEncryptedRowTable(file, n, row, password)
+          case (_, Some(file), _, _) =>
+            parsePlaintextRowTable(file, n) // XXX ignore row
           case _ =>
             Failure(new Exception("workflow: logic error"))
         }
         val rso = tryToOption(rsy)
-        (rso, as.getArgValue("a").getOrElse("read"), as.getArgValue("o")) match {
-          case (Some(rs), "encrypt", Some(o)) =>
-            true // output encrypted file
-          case (Some(rs), _, _) => //rs.table.toCSV
+        (rso, as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
+          case (Some(rs), "encrypt", Some(file)) =>
+            SecureCsv.writeEncrypted(rs, file, n)
+          case (Some(_), "encrypt", _) =>
+            false // corresponds to analyzing encrypted file.
+          case (Some(rs), _, _) =>
+            println(Analysis(rs.table).showColumnMap)
             true
           case _ =>
             false
@@ -58,17 +61,12 @@ object SecureCsv {
 
   def parseEncryptedRowTable(file: File, headerRows: Int, row: String, password: String): Try[SecureCsv[RawRow]] = {
     implicit object RawRowTableParser extends RawParsers(None, false, headerRows)
+    import RawParsers.WithHeaderRow.rawRowCellParser
     import RawRowTableParser.RawTableParser
-
-    //    val keyMap = Map("1" -> "k0JCcO$SY5OI50uj", "2" -> "QwSeQVJNuAg6D6H9", "3" -> "dTLsxr132eucgu10", "4" -> "mexd0Ta81di$fCGp", "5" -> "cb0jlsf4DXtZz_kf")
 
     def encryptionPredicate(w: String): Boolean = w == row
 
-    import RawParsers.WithHeaderRow.rawRowCellParser
-
     implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
-    val pty: Try[Table[RawRow]] = parseResource("TeamProjectEncrypted.csv", classOf[SecureCsv.type])
-
     parsePlaintextTable(file)
   }
 
@@ -76,6 +74,27 @@ object SecureCsv {
     implicit object RawRowTableParser extends RawParsers(None, false, headerRows)
     import RawRowTableParser.RawTableParser
     parsePlaintextTable(file)
+  }
+
+  def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File, headerRows: Int): Boolean = {
+    def createCsvGeneratorFromRawRow: CsvGenerator[RawRow] = {
+      val csvGenerators = new CsvGenerators {}
+      csvGenerators.sequenceGenerator
+    }
+
+    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
+      val csvRenderers = new CsvRenderers {}
+      import CsvRenderers._
+      csvRenderers.sequenceRenderer
+    }
+    implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match { // NOTE: should always have header
+      case Some(h) => Row.csvGenerator(h)
+      case None => createCsvGeneratorFromRawRow
+    }
+    implicit val csvRenderer: CsvRenderer[RawRow] = createCsvRendererForRawRow
+    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t.head
+    secureCsv.table.writeCSVFileEncrypted(file)
+    true
   }
 
   private def tryToOption[X](xy: Try[X]): Option[X] = FP.tryToOption(x => logger.warn(x.getLocalizedMessage))(xy)
