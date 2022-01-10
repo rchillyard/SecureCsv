@@ -40,7 +40,7 @@ object SecureCsv {
         val rso = tryToOption(rsy)
         (rso, as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
           case (Some(rs), "encrypt", Some(file)) =>
-            SecureCsv.writeEncrypted(rs, file, n)
+            SecureCsv.writeEncrypted(rs, file)
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
           case (Some(rs), _, _) =>
@@ -76,20 +76,15 @@ object SecureCsv {
     parsePlaintextTable(file)
   }
 
-  def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File, headerRows: Int): Boolean = {
-    def createCsvGeneratorFromRawRow: CsvGenerator[RawRow] = {
-      val csvGenerators = new CsvGenerators {}
-      csvGenerators.sequenceGenerator
+  def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
+    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
+      import CsvRenderers._
+      new CsvRenderers {}.sequenceRenderer
     }
 
-    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
-      val csvRenderers = new CsvRenderers {}
-      import CsvRenderers._
-      csvRenderers.sequenceRenderer
-    }
-    implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match { // NOTE: should always have header
-      case Some(h) => Row.csvGenerator(h)
-      case None => createCsvGeneratorFromRawRow
+    implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match {
+      case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
+      case None => new CsvGenerators {}.sequenceGenerator
     }
     implicit val csvRenderer: CsvRenderer[RawRow] = createCsvRendererForRawRow
     implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t.head
