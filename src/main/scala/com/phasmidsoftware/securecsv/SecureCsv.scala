@@ -8,6 +8,7 @@ import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.args.Args
 import com.phasmidsoftware.parse.{EncryptedHeadedStringTableParser, RawParsers, TableParser, TableParserException}
 import com.phasmidsoftware.render.{CsvGenerators, CsvRenderer, CsvRenderers}
+import com.phasmidsoftware.securecsv.SecureCsv.workflow
 import com.phasmidsoftware.table._
 import com.phasmidsoftware.util.FP
 import org.slf4j.Logger
@@ -40,7 +41,9 @@ object SecureCsv {
         val rso = tryToOption(rsy)
         (rso, as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
           case (Some(rs), "encrypt", Some(file)) =>
-            SecureCsv.writeEncrypted(rs, file)
+            writeEncrypted(rs, file)
+          case (Some(rs), "decrypt", Some(file)) =>
+            writePlaintext(rs, file)
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
           case (Some(rs), _, _) =>
@@ -54,15 +57,21 @@ object SecureCsv {
     }
   }
 
+  /**
+   * TODO rename this to parseCsvFile
+   *
+   * @param file the file to be parsed.
+   * @param tp the (implicit) TableParser.
+   * @tparam T the underlying row type.
+   * @return a Try of SecureCsv[T]
+   */
   def parsePlaintextTable[T](file: File)(implicit tp: TableParser[Table[T]]): Try[SecureCsv[T]] = Table.parseFile(file) flatMap {
     case x: HeadedTable[_] => Success(SecureCsv(x))
     case _ => Failure(TableParserException("parsedTable is not headed"))
   }
 
   def parseEncryptedRowTable(file: File, headerRows: Int, row: String, password: String): Try[SecureCsv[RawRow]] = {
-    implicit object RawRowTableParser extends RawParsers(None, false, headerRows)
     import RawParsers.WithHeaderRow.rawRowCellParser
-    import RawRowTableParser.RawTableParser
 
     def encryptionPredicate(w: String): Boolean = w == row
 
@@ -76,6 +85,29 @@ object SecureCsv {
     parsePlaintextTable(file)
   }
 
+  def writePlaintext(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
+    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
+      import CsvRenderers._
+      new CsvRenderers {}.sequenceRenderer
+    }
+
+    implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match {
+      case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
+      case None => new CsvGenerators {}.sequenceGenerator
+    }
+    implicit val csvRenderer: CsvRenderer[RawRow] = createCsvRendererForRawRow
+    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t.head
+    secureCsv.table.writeCSVFile(file)
+    true
+  }
+
+  /**
+   * CONSIDER merging with writePlaintext
+   *
+   * @param secureCsv the secureCsv to be written out.
+   * @param file the file to which the CSV file should be written.
+   * @return true if successful.
+   */
   def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
     def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
       import CsvRenderers._
@@ -95,4 +127,8 @@ object SecureCsv {
   private def tryToOption[X](xy: Try[X]): Option[X] = FP.tryToOption(x => logger.warn(x.getLocalizedMessage))(xy)
 
   private val logger: Logger = org.slf4j.LoggerFactory.getLogger(classOf[SecureCsv.type])
+}
+
+object Workflow extends App {
+  if (workflow(args)) println("OK") else println("an error occurred: see logs")
 }
