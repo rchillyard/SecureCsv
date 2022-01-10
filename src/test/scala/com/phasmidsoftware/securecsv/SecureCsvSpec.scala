@@ -39,13 +39,11 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
   }
 
   it should "execute good workflow 2a" in {
-    // TODO show the actual rows rather than the (empty) analysis.
     val args = Array("-a", "decrypt", "-f", "examples/TeamProjectEncrypted.csv", "-r", "1", "-p", "o2AzFGjVMiPCkIVm", "-n", "2")
     SecureCsv.workflow(args) shouldBe true
   }
 
   it should "execute good workflow 2b" in {
-    // TODO Include the header in the output file.
     val args = Array("-a", "decrypt", "-f", "examples/TeamProjectEncrypted.csv", "-o", "output/TeamProject.csv", "-r", "5", "-p", "JOvJCG3sSrZHAdv3", "-n", "2")
     SecureCsv.workflow(args) shouldBe true
   }

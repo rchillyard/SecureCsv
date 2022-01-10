@@ -6,7 +6,7 @@ package com.phasmidsoftware.securecsv
 
 import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.args.Args
-import com.phasmidsoftware.parse.{EncryptedHeadedStringTableParser, RawParsers, TableParser, TableParserException}
+import com.phasmidsoftware.parse._
 import com.phasmidsoftware.render.{CsvGenerators, CsvRenderer, CsvRenderers}
 import com.phasmidsoftware.securecsv.SecureCsv.workflow
 import com.phasmidsoftware.table._
@@ -46,6 +46,8 @@ object SecureCsv {
             writePlaintext(rs, file)
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
+          case (Some(rs), "decrypt", _) =>
+            toCSV(rs)
           case (Some(rs), _, _) =>
             println(Analysis(rs.table).showColumnMap)
             true
@@ -71,10 +73,9 @@ object SecureCsv {
   }
 
   def parseEncryptedRowTable(file: File, headerRows: Int, row: String, password: String): Try[SecureCsv[RawRow]] = {
-    import RawParsers.WithHeaderRow.rawRowCellParser
-
     def encryptionPredicate(w: String): Boolean = w == row
 
+    implicit val cellParser: CellParser[RawRow] = RawParsers.WithHeaderRow.rawRowCellParser
     implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
     parsePlaintextTable(file)
   }
@@ -101,11 +102,20 @@ object SecureCsv {
     true
   }
 
+  def toCSV(secureCsv: SecureCsv[RawRow]): Boolean = {
+    import CsvRenderers._
+    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.sequenceRenderer
+    implicit val z: CsvGenerator[RawRow] = Row.csvGenerator(secureCsv.table.header)
+    val w = secureCsv.table.toCSV
+    println(w)
+    w.nonEmpty
+  }
+
   /**
    * CONSIDER merging with writePlaintext
    *
    * @param secureCsv the secureCsv to be written out.
-   * @param file the file to which the CSV file should be written.
+   * @param file      the file to which the CSV file should be written.
    * @return true if successful.
    */
   def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
