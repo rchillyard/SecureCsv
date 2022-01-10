@@ -34,7 +34,12 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
   }
 
   it should "execute good workflow 1" in {
-    val args = Array("-a", "encrypt", "-f", "examples/TeamProject.csv")
+    val args = Array("-a", "read", "-f", "examples/TeamProject.csv")
+    SecureCsv.workflow(args) shouldBe true
+  }
+
+  it should "execute good workflow 2" in {
+    val args = Array("-a", "decrypt", "-f", "examples/TeamProject.csv", "-r", "1", "-p", "k0JCcO$SY5OI50uj")
     SecureCsv.workflow(args) shouldBe true
   }
 

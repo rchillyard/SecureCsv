@@ -1,6 +1,6 @@
 organization := "com.phasmidsoftware"
 
-name := "SecureCvs"
+name := "SecureCsv"
 
 version := "0.0.1"
 
