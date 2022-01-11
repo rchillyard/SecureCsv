@@ -6,6 +6,7 @@ package com.phasmidsoftware.securecsv
 
 import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.args.Args
+import com.phasmidsoftware.parse.TableParser.includeAll
 import com.phasmidsoftware.parse._
 import com.phasmidsoftware.render.{CsvGenerators, CsvRenderer, CsvRenderers}
 import com.phasmidsoftware.securecsv.SecureCsv.workflow
@@ -26,15 +27,16 @@ case class SecureCsv[T](table: HeadedTable[T])
 
 object SecureCsv {
   def workflow(args: Array[String]): Boolean = {
-    val say = Args.parse(args, Some("[-a [action]] -f filename [-r row] [-p password] [-o filename] [-n rows]"))
+    val say = Args.parse(args, Some("[-a [action]] -f filename [-r row] [-p password] [-o filename] [-n rows] [-m] [-d delimiter]"), optionalProgramName = Some("SecureCsv"))
     tryToOption(say) match {
-      case Some(as) if as.nonEmpty => // NOTE: we shouldn't have to check this if parse working OK
+      case Some(as) =>
         val n = as.getArgValueAs[Int]("n").getOrElse(1)
+        val m = as.isDefined("m")
         val rsy = (as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("f"), as.getArgValue("r"), as.getArgValue("p")) match {
           case ("decrypt", Some(file), Some(row), Some(password)) =>
             parseEncryptedRowTable(file, n, row, password)
           case (_, Some(file), _, _) =>
-            parsePlaintextRowTable(file, n) // XXX ignore row
+            parsePlaintextRowTable(file, n, m) // XXX ignore row
           case _ =>
             Failure(new Exception("workflow: logic error"))
         }
@@ -80,9 +82,8 @@ object SecureCsv {
     parsePlaintextTable(file)
   }
 
-  def parsePlaintextRowTable(file: File, headerRows: Int): Try[SecureCsv[RawRow]] = {
-    implicit object RawRowTableParser extends RawParsers(None, false, headerRows)
-    import RawRowTableParser.RawTableParser
+  def parsePlaintextRowTable(file: File, headerRows: Int, multiline: Boolean): Try[SecureCsv[RawRow]] = {
+    implicit val parser: RawTableParser = com.phasmidsoftware.parse.RawTableParser(includeAll, None, forgiving = false, multiline = multiline, headerRows)
     parsePlaintextTable(file)
   }
 

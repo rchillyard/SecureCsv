@@ -33,4 +33,8 @@ Another example, which invokes a workflow to decrypt a file is as follows:
 In this case, we decrypt the given CSV file.
 However, our key (password) is only valid for one row, the one whose identity (the first column) is "5".
 
+Other options:
+* -m: will use "multiline mode" if it appears (no value necessary): this allows text to have embedded newlines;
+* -d delimiter: allow for a different delimiter on input/output (default is comma).
+
 
