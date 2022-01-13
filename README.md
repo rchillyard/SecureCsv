@@ -36,5 +36,9 @@ However, our key (password) is only valid for one row, the one whose identity (t
 Other options:
 * -m: will use "multiline mode" if it appears (no value necessary): this allows text to have embedded newlines;
 * -d delimiter: allow for a different delimiter on input/output (default is comma).
+* -k key column: specifies which column should be used as the row identifier (defaults to the first column)
 
 
+Version 0.0.2: added mechanism for specifying the key column.
+
+Version 0.0.1: initial version used to send out project data for Fall 2021.

@@ -4,10 +4,9 @@
 
 package com.phasmidsoftware.securecsv
 
-import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.parse.TableParser
 import com.phasmidsoftware.securecsv.examples.{TeamProject, TeamProjectTableParser}
-import com.phasmidsoftware.table.Table
+import com.phasmidsoftware.table.{RawRow, Table}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should
 

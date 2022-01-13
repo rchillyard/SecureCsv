@@ -4,11 +4,10 @@
 
 package com.phasmidsoftware.securecsv
 
-import com.phasmidsoftware.RawRow
 import com.phasmidsoftware.args.Args
 import com.phasmidsoftware.parse.TableParser.includeAll
 import com.phasmidsoftware.parse._
-import com.phasmidsoftware.render.{CsvGenerators, CsvRenderer, CsvRenderers}
+import com.phasmidsoftware.render.{CsvRenderer, CsvRenderers}
 import com.phasmidsoftware.securecsv.SecureCsv.workflow
 import com.phasmidsoftware.table._
 import com.phasmidsoftware.util.FP
@@ -43,9 +42,9 @@ object SecureCsv {
         val rso = tryToOption(rsy)
         (rso, as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
           case (Some(rs), "encrypt", Some(file)) =>
-            writeEncrypted(rs, file)
+            writeEncrypted(rs, file, "Team Number")
           case (Some(rs), "decrypt", Some(file)) =>
-            writePlaintext(rs, file)
+            writePlaintext(rs, file, "Team Number")
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
           case (Some(rs), "decrypt", _) =>
@@ -87,25 +86,19 @@ object SecureCsv {
     parsePlaintextTable(file)
   }
 
-  def writePlaintext(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
-    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
-      import CsvRenderers._
-      new CsvRenderers {}.sequenceRenderer
-    }
-
+  def writePlaintext(secureCsv: SecureCsv[RawRow], file: File, idColumn: String): Boolean = {
     implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match {
       case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
-      case None => new CsvGenerators {}.sequenceGenerator
+      case _ => throw TableException("writePlaintext: logic error")
     }
-    implicit val csvRenderer: CsvRenderer[RawRow] = createCsvRendererForRawRow
-    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t.head
+    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
+    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t(idColumn).toOption.getOrElse("")
     secureCsv.table.writeCSVFile(file)
     true
   }
 
   def toCSV(secureCsv: SecureCsv[RawRow]): Boolean = {
-    import CsvRenderers._
-    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.sequenceRenderer
+    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
     implicit val z: CsvGenerator[RawRow] = Row.csvGenerator(secureCsv.table.header)
     val w = secureCsv.table.toCSV
     println(w)
@@ -119,18 +112,13 @@ object SecureCsv {
    * @param file      the file to which the CSV file should be written.
    * @return true if successful.
    */
-  def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File): Boolean = {
-    def createCsvRendererForRawRow: CsvRenderer[RawRow] = {
-      import CsvRenderers._
-      new CsvRenderers {}.sequenceRenderer
-    }
-
+  def writeEncrypted(secureCsv: SecureCsv[RawRow], file: File, idColumn: String): Boolean = {
     implicit val csvGenerator: CsvGenerator[RawRow] = secureCsv.table.maybeHeader match {
       case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
-      case None => new CsvGenerators {}.sequenceGenerator
+      case None => throw TableException("writeEncrypted: logic error")
     }
-    implicit val csvRenderer: CsvRenderer[RawRow] = createCsvRendererForRawRow
-    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t.head
+    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
+    implicit val hasKey: HasKey[RawRow] = (t: RawRow) => t(idColumn).toOption.getOrElse("")
     secureCsv.table.writeCSVFileEncrypted(file)
     true
   }
