@@ -39,20 +39,12 @@ object SecureCsv {
           case _ =>
             Failure(new Exception("workflow: logic error"))
         }
-        // CONSIDER making this logic part of Args.
-        val ke: Either[String, Int] = as.getArg("k").flatMap(_.as[Int].value) match {
-          case Some(x) => Right(x)
-          case None => as.getArgValue("k") match {
-            case Some(w) => Left(w)
-            case None => Right(0)
-          }
-        }
-        val rso = tryToOption(rsy)
-        (rso, as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
+        val wXe = as.getArgValueEitherOr[Int]("k").getOrElse(Right(0))
+        (tryToOption(rsy), as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
           case (Some(rs), "encrypt", Some(file)) =>
-            writeEncrypted(rs, file, ke)
+            writeEncrypted(rs, file, wXe)
           case (Some(rs), "decrypt", Some(file)) =>
-            writePlaintext(rs, file, ke)
+            writePlaintext(rs, file, wXe)
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
           case (Some(rs), "decrypt", _) =>
