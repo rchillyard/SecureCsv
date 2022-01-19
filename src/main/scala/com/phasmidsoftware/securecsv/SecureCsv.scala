@@ -20,6 +20,8 @@ import scala.util.{Failure, Success, Try}
 /**
  * SecureCsv.
  *
+ * CONSIDER do we really need to define this case class?
+ *
  * @param table the table.
  * @tparam T the underlying row type.
  */
@@ -62,6 +64,12 @@ object SecureCsv {
     }
   }
 
+  /**
+   * Method to simply show the given table in CSV form on the console.
+   *
+   * @param secureCsv a table.
+   * @return true if all is well.
+   */
   def toCSV(secureCsv: SecureCsv[RawRow]): Boolean = {
     implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
     implicit val z: CsvGenerator[RawRow] = Row.csvGenerator(secureCsv.table.header)
@@ -84,9 +92,9 @@ object Workflow extends App {
   type Algorithm = tsec.cipher.symmetric.jca.AES128CTR
 
   implicit val encryption: HexEncryption[Algorithm] = EncryptionUTF8AES128CTR
-
   implicit val tableEncryption: TableEncryption[Algorithm] = new TableEncryption[Algorithm]
-  if (workflow(args)) println("OK") else println("an error occurred: see logs")
+
+  System.err.println(if (workflow(args)) "Workflow complete" else "an error occurred: see logs")
 }
 
 class TableEncryption[A: HexEncryption]() {
