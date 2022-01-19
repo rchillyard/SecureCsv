@@ -9,11 +9,10 @@ import com.phasmidsoftware.crypto.{EncryptionUTF8AES128CTR, HexEncryption}
 import com.phasmidsoftware.parse.TableParser.includeAll
 import com.phasmidsoftware.parse._
 import com.phasmidsoftware.render.{CsvRenderer, CsvRenderers}
-import com.phasmidsoftware.securecsv.SecureCsv.workflow
+import com.phasmidsoftware.securecsv.SecureCsv.{keyValue, workflow}
 import com.phasmidsoftware.table._
 import com.phasmidsoftware.util.FP
 import org.slf4j.Logger
-import tsec.cipher.symmetric.jca.AES128CTR
 
 import java.io.File
 import scala.util.{Failure, Success, Try}
@@ -28,11 +27,7 @@ case class SecureCsv[T](table: HeadedTable[T])
 
 object SecureCsv {
 
-  type Algorithm = AES128CTR
-  implicit val encryption: HexEncryption[Algorithm] = EncryptionUTF8AES128CTR
-  implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
-
-  def workflow(args: Array[String]): Boolean = {
+  def workflow[A](args: Array[String])(implicit tableEncryption: TableEncryption[A]): Boolean = {
     val say = Args.parse(args, Some("[-a [action]] -f filename [-r row] [-p password] [-o filename] [-n rows] [-m] [-d delimiter]"), optionalProgramName = Some("SecureCsv"))
     tryToOption(say) match {
       case Some(as) =>
@@ -40,18 +35,18 @@ object SecureCsv {
         val m = as.isDefined("m")
         val rsy = (as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("f"), as.getArgValue("r"), as.getArgValue("p")) match {
           case ("decrypt", Some(file), Some(row), Some(password)) =>
-            parseEncryptedRowTable(file, n, row, password)
+            tableEncryption.parseEncryptedRowTable(file, n, row, password)
           case (_, Some(file), _, _) =>
-            parsePlaintextRowTable(file, n, m) // XXX ignore row
+            tableEncryption.parsePlaintextRowTable(file, n, m) // XXX ignore row
           case _ =>
             Failure(new Exception("workflow: logic error"))
         }
         val wXe = as.getArgValueEitherOr[Int]("k").getOrElse(Right(0))
         (tryToOption(rsy), as.getArgValue("a").getOrElse("read"), as.getArgValueAs[File]("o")) match {
           case (Some(rs), "encrypt", Some(file)) =>
-            writeEncrypted(rs, file, wXe)
+            tableEncryption.writeEncrypted(rs, file, wXe)
           case (Some(rs), "decrypt", Some(file)) =>
-            writePlaintext(rs, file, wXe)
+            tableEncryption.writePlaintext(rs, file, wXe)
           case (Some(_), "encrypt", _) =>
             false // corresponds to analyzing encrypted file.
           case (Some(rs), "decrypt", _) =>
@@ -66,6 +61,36 @@ object SecureCsv {
         false
     }
   }
+
+  def toCSV(secureCsv: SecureCsv[RawRow]): Boolean = {
+    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
+    implicit val z: CsvGenerator[RawRow] = Row.csvGenerator(secureCsv.table.header)
+    val w = secureCsv.table.toCSV
+    println(w)
+    w.nonEmpty
+  }
+
+  def keyValue(t: RawRow, idColumn: Either[String, Int]): String = (idColumn match {
+    case Left(w) => t(w).toOption
+    case Right(x) => t.ws.lift(x)
+  }).getOrElse(t.ws.head)
+
+  private def tryToOption[X](xy: Try[X]): Option[X] = FP.tryToOption(x => logger.warn(x.getLocalizedMessage))(xy)
+
+  private val logger: Logger = org.slf4j.LoggerFactory.getLogger(classOf[SecureCsv.type])
+}
+
+object Workflow extends App {
+  type Algorithm = tsec.cipher.symmetric.jca.AES128CTR
+
+  implicit val encryption: HexEncryption[Algorithm] = EncryptionUTF8AES128CTR
+
+  implicit val tableEncryption: TableEncryption[Algorithm] = new TableEncryption[Algorithm]
+  if (workflow(args)) println("OK") else println("an error occurred: see logs")
+}
+
+class TableEncryption[A: HexEncryption]() {
+  implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
 
   /**
    * Method to parse a CSV file.
@@ -84,7 +109,7 @@ object SecureCsv {
     def encryptionPredicate(w: String): Boolean = w == row
 
     implicit val cellParser: CellParser[RawRow] = RawParsers.WithHeaderRow.rawRowCellParser
-    implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow, Algorithm](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
+    implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow, A](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
     parseCsvFile(file)
   }
 
@@ -101,14 +126,6 @@ object SecureCsv {
     implicit val hasKey: HasKey[RawRow] = (t: RawRow) => keyValue(t, idColumn)
     secureCsv.table.writeCSVFile(file)
     true
-  }
-
-  def toCSV(secureCsv: SecureCsv[RawRow]): Boolean = {
-    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
-    implicit val z: CsvGenerator[RawRow] = Row.csvGenerator(secureCsv.table.header)
-    val w = secureCsv.table.toCSV
-    println(w)
-    w.nonEmpty
   }
 
   /**
@@ -128,16 +145,5 @@ object SecureCsv {
     true
   }
 
-  private def keyValue(t: RawRow, idColumn: Either[String, Int]) = (idColumn match {
-    case Left(w) => t(w).toOption
-    case Right(x) => t.ws.lift(x)
-  }).getOrElse(t.ws.head)
-
-  private def tryToOption[X](xy: Try[X]): Option[X] = FP.tryToOption(x => logger.warn(x.getLocalizedMessage))(xy)
-
-  private val logger: Logger = org.slf4j.LoggerFactory.getLogger(classOf[SecureCsv.type])
 }
 
-object Workflow extends App {
-  if (workflow(args)) println("OK") else println("an error occurred: see logs")
-}

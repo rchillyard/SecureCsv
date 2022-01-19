@@ -4,6 +4,7 @@
 
 package com.phasmidsoftware.securecsv
 
+import com.phasmidsoftware.crypto.{EncryptionUTF8AES128CTR, HexEncryption}
 import com.phasmidsoftware.parse.TableParser
 import com.phasmidsoftware.securecsv.examples.{TeamProject, TeamProjectTableParser}
 import com.phasmidsoftware.table.{RawRow, Table}
@@ -16,6 +17,11 @@ import scala.util.{Success, Try}
 class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
 
   behavior of "SecureCsv"
+
+  type Algorithm = tsec.cipher.symmetric.jca.AES128CTR
+
+  implicit val encryption: HexEncryption[Algorithm] = EncryptionUTF8AES128CTR
+  implicit val tableEncryption: TableEncryption[Algorithm] = new TableEncryption[Algorithm]
 
   it should "execute bad workflow 0" in {
     val args = Array[String]()
@@ -61,7 +67,7 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
   it should "parseCsvFile" in {
     implicit val teamProjectParser: TableParser[Table[TeamProject]] = TeamProjectTableParser
     val filename = "examples/TeamProject.csv"
-    val psy: Try[SecureCsv[TeamProject]] = SecureCsv.parseCsvFile(new File(filename))
+    val psy: Try[SecureCsv[TeamProject]] = tableEncryption.parseCsvFile(new File(filename))
     psy should matchPattern { case Success(SecureCsv(_)) => }
     for (ps <- psy) {
       ps.table.size shouldBe 5
@@ -71,7 +77,7 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
 
   it should "parsePlaintextRowTable" in {
     val filename = "examples/TeamProject.csv"
-    val psy: Try[SecureCsv[RawRow]] = SecureCsv.parsePlaintextRowTable(new File(filename), 2, multiline = false)
+    val psy: Try[SecureCsv[RawRow]] = tableEncryption.parsePlaintextRowTable(new File(filename), 2, multiline = false)
     psy should matchPattern { case Success(SecureCsv(_)) => }
     for (ps <- psy) {
       ps.table.size shouldBe 5
