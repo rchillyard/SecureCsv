@@ -47,6 +47,7 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
     SecureCsv.workflow(args) shouldBe true
   }
 
+  // TODO Issue #1
   it should "execute good workflow 3a" in {
     val args = Array("-a", "encrypt", "-f", "examples/TeamProject.csv", "-k", "0", "-o", "output/TeamProjectEncrypted.csv", "-n", "2")
     SecureCsv.workflow(args) shouldBe true
@@ -57,10 +58,10 @@ class SecureCsvSpec extends AnyFlatSpec with should.Matchers {
     SecureCsv.workflow(args) shouldBe true
   }
 
-  it should "parsePlaintextTable" in {
+  it should "parseCsvFile" in {
     implicit val teamProjectParser: TableParser[Table[TeamProject]] = TeamProjectTableParser
     val filename = "examples/TeamProject.csv"
-    val psy: Try[SecureCsv[TeamProject]] = SecureCsv.parsePlaintextTable(new File(filename))
+    val psy: Try[SecureCsv[TeamProject]] = SecureCsv.parseCsvFile(new File(filename))
     psy should matchPattern { case Success(SecureCsv(_)) => }
     for (ps <- psy) {
       ps.table.size shouldBe 5

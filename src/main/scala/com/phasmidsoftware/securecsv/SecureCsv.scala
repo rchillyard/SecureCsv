@@ -5,6 +5,7 @@
 package com.phasmidsoftware.securecsv
 
 import com.phasmidsoftware.args.Args
+import com.phasmidsoftware.crypto.{EncryptionUTF8AES128CTR, HexEncryption}
 import com.phasmidsoftware.parse.TableParser.includeAll
 import com.phasmidsoftware.parse._
 import com.phasmidsoftware.render.{CsvRenderer, CsvRenderers}
@@ -12,6 +13,7 @@ import com.phasmidsoftware.securecsv.SecureCsv.workflow
 import com.phasmidsoftware.table._
 import com.phasmidsoftware.util.FP
 import org.slf4j.Logger
+import tsec.cipher.symmetric.jca.AES128CTR
 
 import java.io.File
 import scala.util.{Failure, Success, Try}
@@ -25,6 +27,11 @@ import scala.util.{Failure, Success, Try}
 case class SecureCsv[T](table: HeadedTable[T])
 
 object SecureCsv {
+
+  type Algorithm = AES128CTR
+  implicit val encryption: HexEncryption[Algorithm] = EncryptionUTF8AES128CTR
+  implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
+
   def workflow(args: Array[String]): Boolean = {
     val say = Args.parse(args, Some("[-a [action]] -f filename [-r row] [-p password] [-o filename] [-n rows] [-m] [-d delimiter]"), optionalProgramName = Some("SecureCsv"))
     tryToOption(say) match {
@@ -61,14 +68,14 @@ object SecureCsv {
   }
 
   /**
-   * TODO rename this to parseCsvFile
+   * Method to parse a CSV file.
    *
    * @param file the file to be parsed.
-   * @param tp the (implicit) TableParser.
+   * @param tp   the (implicit) TableParser.
    * @tparam T the underlying row type.
    * @return a Try of SecureCsv[T]
    */
-  def parsePlaintextTable[T](file: File)(implicit tp: TableParser[Table[T]]): Try[SecureCsv[T]] = Table.parseFile(file) flatMap {
+  def parseCsvFile[T](file: File)(implicit tp: TableParser[Table[T]]): Try[SecureCsv[T]] = Table.parseFile(file) flatMap {
     case x: HeadedTable[_] => Success(SecureCsv(x))
     case _ => Failure(TableParserException("parsedTable is not headed"))
   }
@@ -77,13 +84,13 @@ object SecureCsv {
     def encryptionPredicate(w: String): Boolean = w == row
 
     implicit val cellParser: CellParser[RawRow] = RawParsers.WithHeaderRow.rawRowCellParser
-    implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
-    parsePlaintextTable(file)
+    implicit val parser: TableParser[Table[RawRow]] = EncryptedHeadedStringTableParser[RawRow, Algorithm](encryptionPredicate, _ => password, headerRowsToRead = headerRows)
+    parseCsvFile(file)
   }
 
   def parsePlaintextRowTable(file: File, headerRows: Int, multiline: Boolean): Try[SecureCsv[RawRow]] = {
     implicit val parser: RawTableParser = com.phasmidsoftware.parse.RawTableParser(includeAll, None, forgiving = false, multiline = multiline, headerRows)
-    parsePlaintextTable(file)
+    parseCsvFile(file)
   }
 
   def writePlaintext(secureCsv: SecureCsv[RawRow], file: File, idColumn: Either[String, Int]): Boolean = {
@@ -91,7 +98,6 @@ object SecureCsv {
       case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
       case _ => throw TableException("writePlaintext: logic error")
     }
-    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
     implicit val hasKey: HasKey[RawRow] = (t: RawRow) => keyValue(t, idColumn)
     secureCsv.table.writeCSVFile(file)
     true
@@ -117,7 +123,6 @@ object SecureCsv {
       case Some(h) => Row.csvGenerator(h) // NOTE: should always have header
       case None => throw TableException("writeEncrypted: logic error")
     }
-    implicit val csvRenderer: CsvRenderer[RawRow] = new CsvRenderers {}.rawRowRenderer
     implicit val hasKey: HasKey[RawRow] = (t: RawRow) => keyValue(t, idColumn)
     secureCsv.table.writeCSVFileEncrypted(file)
     true
